@@ -1,0 +1,117 @@
+openapi: 3.0.0
+info:
+  title: Agentic Dev Team API
+  version: 1.0.0
+  description: Multi-agent web development system API
+
+paths:
+  /v1/drafts:
+    get:
+      summary: List drafts
+      responses:
+        '200':
+          description: List of drafts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Draft'
+    post:
+      summary: Create draft
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DraftCreate'
+      responses:
+        '201':
+          description: Draft created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Draft'
+
+  /v1/drafts/{id}:
+    get:
+      summary: Get draft by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Draft details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Draft'
+    put:
+      summary: Update draft
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DraftUpdate'
+      responses:
+        '200':
+          description: Draft updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Draft'
+    delete:
+      summary: Delete draft
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Draft deleted
+
+components:
+  schemas:
+    Draft:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        owner:
+          type: string
+        payload:
+          type: object
+        updated_at:
+          type: string
+          format: date-time
+    DraftCreate:
+      type: object
+      properties:
+        owner:
+          type: string
+        payload:
+          type: object
+      required:
+        - owner
+        - payload
+    DraftUpdate:
+      type: object
+      properties:
+        owner:
+          type: string
+        payload:
+          type: object

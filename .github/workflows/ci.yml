@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_agentic
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Validate OpenAPI contract
+      run: |
+        python -c "
+        from openapi_spec_validator.readers import read_from_filename
+        from openapi_spec_validator import validate_spec
+        try:
+            spec_dict, spec_url = read_from_filename('contracts/api.yaml')
+            validate_spec(spec_dict)
+            print('✓ OpenAPI contract is valid')
+        except Exception as e:
+            print(f'✗ OpenAPI contract validation failed: {e}')
+            exit(1)
+        "
+    
+    - name: Set up test environment
+      env:
+        DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/test_agentic
+        LLM_PROVIDER: openai
+        OPENAI_API_KEY: test_key
+      run: |
+        export DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/test_agentic
+        alembic upgrade head
+    
+    - name: Run tests
+      env:
+        DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/test_agentic
+        LLM_PROVIDER: openai
+        OPENAI_API_KEY: test_key
+      run: |
+        pytest app/qa/ -v
+    
+    - name: Test contract parity
+      env:
+        DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/test_agentic
+        LLM_PROVIDER: openai
+        OPENAI_API_KEY: test_key
+      run: |
+        python -c "
+        import yaml
+        from fastapi.testclient import TestClient
+        from app.main import app
+        
+        client = TestClient(app)
+        
+        # Load contract
+        with open('contracts/api.yaml', 'r') as f:
+            contract = yaml.safe_load(f)
+        
+        # Get served spec
+        response = client.get('/openapi.json')
+        served_spec = response.json()
+        
+        # Check paths match
+        contract_paths = set(contract.get('paths', {}).keys())
+        served_paths = set(served_spec.get('paths', {}).keys())
+        
+        missing_paths = contract_paths - served_paths
+        if missing_paths:
+            print(f'✗ Missing paths in served spec: {missing_paths}')
+            exit(1)
+        
+        print('✓ Contract parity check passed')
+        "
